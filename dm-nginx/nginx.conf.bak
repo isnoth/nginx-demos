@@ -1,0 +1,263 @@
+
+#user  nobody;
+worker_processes  1;
+
+#error_log  logs/error.log;
+#error_log  logs/error.log  notice;
+#error_log  logs/error.log  info;
+
+#pid        logs/nginx.pid;
+
+
+events {
+    worker_connections  1024;
+}
+
+
+http {
+    include       mime.types;
+    default_type  application/octet-stream;
+    limit_req_zone $remote_addr zone=allips:10m rate=15r/m;
+    sendfile        on;
+    keepalive_timeout  65;
+    gzip on;
+
+    upstream backend{
+        server 42.193.215.253:80 weight=100000;
+        server 172.26.0.14:80 weight=1;
+    }
+
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        '' close;
+    }
+
+    server {
+        listen       80;
+        server_name  localhost;
+
+        location / {
+            proxy_pass  http://backend;
+            proxy_read_timeout 5m;
+            proxy_set_header Host            $host;
+            proxy_set_header X-Forwarded-For $remote_addr;
+
+            # CORS
+            if ($http_origin ~* "damaishuju.com|damaishuju.cn$") {
+                add_header Access-Control-Allow-Origin $http_origin always;
+                add_header Access-Control-Allow-Headers "Content-Type, Content-Length, Authorization, Accept, X-Requested-With , yourHeaderFeild" always;
+                add_header Access-Control-Allow-Methods "PUT, POST, GET, DELETE, OPTIONS" always;
+                add_header Access-Control-Allow-Credentials "true" always;
+            }
+        }
+
+        location /api/fetchReportData {
+            limit_req zone=allips burst=15 nodelay;
+            limit_req_status 429;
+            proxy_pass  http://backend;
+            proxy_read_timeout 5m;
+            proxy_set_header Host            $host;
+            proxy_set_header X-Forwarded-For $remote_addr;
+
+            # CORS
+            if ($http_origin ~* "damaishuju.com|damaishuju.cn$") {
+                add_header Access-Control-Allow-Origin $http_origin always;
+                add_header Access-Control-Allow-Headers "Content-Type, Content-Length, Authorization, Accept, X-Requested-With , yourHeaderFeild" always;
+                add_header Access-Control-Allow-Methods "PUT, POST, GET, DELETE, OPTIONS" always;
+                add_header Access-Control-Allow-Credentials "true" always;
+            }
+        }
+
+        location ~ /(wpi-test) {
+            rewrite ^/wpi-test/(.*)$ /wxapi/$1 break;
+            proxy_pass  http://119.29.106.150:3004;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+            # pass origin to server, CORS controled in server
+            proxy_set_header Origin $http_origin; # pass origin to server 
+        }
+
+        location ~ /(gql-test) {
+            rewrite /gql-test /graphql break;
+            proxy_pass  http://119.29.106.150:3004;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+            # pass origin to server, CORS controled in server
+            proxy_set_header Origin $http_origin; # pass origin to server 
+        }
+        location /npi-test {
+            rewrite ^/npi-test/(.*)$ /nodeapi/$1 break;
+            proxy_pass  http://119.29.106.150:3004;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+            # pass origin to server, CORS controled in server
+            proxy_set_header Origin $http_origin; # pass origin to server 
+        }
+
+        location ~ /(graphql|nodeapi|wxConnectCb|wxInfoCb|wxLoginCb|wxapi) {
+            proxy_pass  http://172.18.0.7:3004; # 转发规则 81.71.17.91
+                # proxy_pass  http://42.194.145.99:3004;
+                proxy_set_header Host $host; # 修改转发请求头，让8081端口的应用可以受到真实的请求
+                proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+            # pass origin to server, CORS controled in server
+            proxy_set_header Origin $http_origin; # pass origin to server 
+        }
+
+        location /wxRegLogin {
+            proxy_pass  http://172.18.0.7:3004;# debug
+                proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+            # pass origin to server, CORS controled in server
+            proxy_set_header Origin $http_origin; # pass origin to server 
+        }
+
+        location /wxlogin {
+            proxy_pass  http://172.18.0.7:3004;# debug
+                # proxy_pass  http://42.194.145.99:3004;# debug
+                proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+            # pass origin to server, CORS controled in server
+            proxy_set_header Origin $http_origin; # pass origin to server 
+        }
+
+        location /ws {
+            proxy_pass  http://172.18.0.7:3005; # 转发规则
+                # proxy_pass  http://42.194.145.99:3005;# debug
+                proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+
+        error_page   500 502 503 504  /50x.html;
+        location = /50x.html {
+            root   html;
+        }
+    }
+
+
+    # another virtual host using mix of IP-, name-, and port-based configuration
+    #
+    #server {
+        #    listen       8000;
+        #    listen       somename:8080;
+        #    server_name  somename  alias  another.alias;
+
+        #    location / {
+            #        root   html;
+            #        index  index.html index.htm;
+            #    }
+        #}
+
+
+    # HTTPS server
+    #
+    # server {
+    #     listen       443 ssl;
+    #     server_name  damaishuju.com;
+
+    #     ssl_certificate      C:/nginx-1.16.1/ssl/1_damaishuju.com_bundle.crt;
+    #     ssl_certificate_key  C:/nginx-1.16.1/ssl/2_damaishuju.com.key;
+
+    #     ssl_session_cache    shared:SSL:1m;
+    #     ssl_session_timeout  5m;
+
+    #     ssl_ciphers  HIGH:!aNULL:!MD5;
+    #     ssl_prefer_server_ciphers  on;
+
+    #     location / {
+    #         proxy_pass  http://backend;
+    #         proxy_set_header Host            $host;
+    #         proxy_set_header X-Forwarded-For $remote_addr;
+
+    #         # CORS
+    #         if ($http_origin ~* "^http://(ml.damaishuju.com|shopee.damaishuju.com|www.damaishuju.cn)$") {
+    #             add_header Access-Control-Allow-Origin $http_origin always;
+
+    #             add_header Access-Control-Allow-Headers "Content-Type, Content-Length, Authorization, Accept, X-Requested-With , yourHeaderFeild" always;
+
+    #             add_header Access-Control-Allow-Methods "PUT, POST, GET, DELETE, OPTIONS" always;
+
+    #             add_header Access-Control-Allow-Credentials "true" always;
+    #         }
+    #     }
+    #     location /graphql {
+    #         proxy_pass  http://172.18.0.7:3004; # 转发规则
+    #             proxy_set_header Host $host; # 修改转发请求头，让8081端口的应用可以受到真实的请求
+    #             proxy_set_header X-Real-IP $remote_addr;
+    #         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+    #         # pass origin to server, CORS controled in server
+    #         proxy_set_header Origin $http_origin; # pass origin to server 
+    #     }
+
+    #     location /graphql-test {
+    #         rewrite /graphql-test /graphql  break;
+    #         proxy_pass  http://134.175.43.182:3004; # 转发规则
+    #             # proxy_pass  http://42.194.145.99:3004;
+    #             proxy_set_header Host $host; # 修改转发请求头，让8081端口的应用可以受到真实的请求
+    #             proxy_set_header X-Real-IP $remote_addr;
+    #         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+    #         # pass origin to server, CORS controled in server
+    #         proxy_set_header Origin $http_origin; # pass origin to server 
+    #     }
+
+    #     location /wxapi-test {
+    #         rewrite ^/wxapi-test/(.*)$ /wxapi/$1 break;
+    #         proxy_pass  http://134.175.43.182:3004;
+    #         proxy_set_header Host $host;
+    #         proxy_set_header X-Real-IP $remote_addr;
+    #         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+    #         # pass origin to server, CORS controled in server
+    #         proxy_set_header Origin $http_origin; # pass origin to server 
+    #     }
+
+    #     location /wxlogin {
+    #         proxy_pass  http://172.18.0.7:3004;# debug
+    #             proxy_set_header Host $host;
+    #         proxy_set_header X-Real-IP $remote_addr;
+    #         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+    #         # pass origin to server, CORS controled in server
+    #         proxy_set_header Origin $http_origin; # pass origin to server 
+    #     }
+
+    #     location /wxRegLogin {
+    #         proxy_pass  http://172.18.0.7:3004;# debug
+    #             proxy_set_header Host $host;
+    #         proxy_set_header X-Real-IP $remote_addr;
+    #         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+    #         # pass origin to server, CORS controled in server
+    #         proxy_set_header Origin $http_origin; # pass origin to server 
+    #     }
+
+
+    #     location /ws {
+    #         proxy_pass  http://172.18.0.7:3005; # 转发规则
+    #             proxy_http_version 1.1;
+    #         proxy_set_header Upgrade $http_upgrade;
+    #         proxy_set_header Connection $connection_upgrade;
+    #         proxy_set_header Host $host;
+    #         proxy_set_header X-Real-IP $remote_addr;
+    #         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    #     }
+    # }
+
+}

@@ -1,0 +1,14 @@
+#limit_req_zone $binary_remote_addr zone=allips:10m rate=1r/s;
+limit_req_zone $remote_addr zone=allips:10m rate=1r/s;
+
+server {
+    limit_req zone=allips nodelay;
+    limit_req_status 444;
+
+    location / {
+
+# default_type application/json;
+# return 200 '{"result": "ok $remote_addr"}';
+    proxy_pass         http://192.168.0.121:8000;
+    }
+}

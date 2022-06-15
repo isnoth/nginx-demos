@@ -1,0 +1,13 @@
+limit_req_zone $binary_remote_addr zone=req_limit_per_ip:10m rate=1r/s;
+
+server {
+  listen      80;
+  server_name example.com;
+
+#limit_req zone=req_limit_per_ip burst=10 nodelay;
+  limit_req zone=req_limit_per_ip nodelay;
+
+  location / {
+    proxy_pass         http://192.168.0.121:8000;
+  }
+}
